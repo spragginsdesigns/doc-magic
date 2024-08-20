@@ -5,10 +5,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Download, Loader2, Lightbulb } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import ReactMarkdown from "react-markdown";
-
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { dark } from "react-syntax-highlighter/dist/cjs/styles/prism";
-import { ComponentPropsWithoutRef } from "react";
 
 const DocMagic = () => {
 	const [inputText, setInputText] = useState("");
