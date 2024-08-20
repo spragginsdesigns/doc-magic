@@ -5,10 +5,22 @@ import { Textarea } from "@/components/ui/textarea";
 import { Download, Loader2, Lightbulb } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import ReactMarkdown from "react-markdown";
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { dark } from "react-syntax-highlighter/dist/cjs/styles/prism";
+import { PrismLight as SyntaxHighlighter } from "react-syntax-highlighter";
+import { dark } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { Components } from "react-markdown";
+import { CodeProps } from "react-markdown/lib/ast-to-react";
 
-const DocMagic = () => {
+// Import languages you want to use
+import js from "react-syntax-highlighter/dist/esm/languages/prism/javascript";
+import ts from "react-syntax-highlighter/dist/esm/languages/prism/typescript";
+import python from "react-syntax-highlighter/dist/esm/languages/prism/python";
+
+// Register the languages you want to use
+SyntaxHighlighter.registerLanguage("js", js);
+SyntaxHighlighter.registerLanguage("ts", ts);
+SyntaxHighlighter.registerLanguage("python", python);
+
+const DocMagic: React.FC = () => {
 	const [inputText, setInputText] = useState("");
 	const [outputMarkdown, setOutputMarkdown] = useState("");
 	const [isLoading, setIsLoading] = useState(false);
@@ -59,6 +71,26 @@ const DocMagic = () => {
 			setStatusMessage("Error occurred. Please try again.");
 		}
 		setIsLoading(false);
+	};
+
+	const components: Components = {
+		code({ node, inline, className, children, ...props }: CodeProps) {
+			const match = /language-(\w+)/.exec(className || "");
+			return !inline && match ? (
+				<SyntaxHighlighter
+					style={dark}
+					language={match[1]}
+					PreTag="div"
+					{...(props as any)}
+				>
+					{String(children).replace(/\n$/, "")}
+				</SyntaxHighlighter>
+			) : (
+				<code className={className} {...props}>
+					{children}
+				</code>
+			);
+		}
 	};
 
 	const handleExport = () => {
@@ -137,33 +169,7 @@ const DocMagic = () => {
 								Markdown Preview
 							</label>
 							<div className="w-full h-64 bg-gray-700 text-gray-100 border-gray-600 overflow-auto p-4">
-								<ReactMarkdown
-									components={{
-										code({
-											node,
-											inline,
-											className,
-											children,
-											...props
-										}: Components["code"]) {
-											const match = /language-(\w+)/.exec(className || "");
-											return !inline && match ? (
-												<SyntaxHighlighter
-													style={dark}
-													language={match[1]}
-													PreTag="div"
-													{...props}
-												>
-													{String(children).replace(/\n$/, "")}
-												</SyntaxHighlighter>
-											) : (
-												<code className={className} {...props}>
-													{children}
-												</code>
-											);
-										}
-									}}
-								>
+								<ReactMarkdown components={components}>
 									{outputMarkdown}
 								</ReactMarkdown>
 							</div>
