@@ -17,7 +17,9 @@ Provide your suggestions as a JSON array of strings.`;
 	const suggestionsText = await response.text();
 
 	try {
-		const suggestions = JSON.parse(suggestionsText);
+		// Remove Markdown code block syntax if present
+		const cleanedText = suggestionsText.replace(/```json\n|\n```/g, "").trim();
+		const suggestions = JSON.parse(cleanedText);
 		if (Array.isArray(suggestions)) {
 			return suggestions;
 		} else {
