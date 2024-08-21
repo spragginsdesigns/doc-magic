@@ -10,24 +10,32 @@ async function generateSuggestions(markdown: string): Promise<string[]> {
 Markdown content:
 ${markdown}
 
-Provide your suggestions as a JSON array of strings.`;
+Provide your suggestions as a JSON array of strings, with each suggestion as a separate string element.`;
 
 	const result = await model.generateContent(prompt);
 	const response = await result.response;
 	const suggestionsText = await response.text();
 
 	try {
-		// Remove Markdown code block syntax if present
-		const cleanedText = suggestionsText.replace(/```json\n|\n```/g, "").trim();
-		const suggestions = JSON.parse(cleanedText);
-		if (Array.isArray(suggestions)) {
+		// Remove Markdown code block syntax and any surrounding whitespace
+		const cleanedText = suggestionsText
+			.replace(/```json\s*|\s*```/g, "")
+			.trim();
+		let suggestions = JSON.parse(cleanedText);
+
+		if (
+			Array.isArray(suggestions) &&
+			suggestions.every((s) => typeof s === "string")
+		) {
 			return suggestions;
 		} else {
 			throw new Error("Invalid suggestions format");
 		}
 	} catch (error) {
 		console.error("Failed to parse suggestions:", suggestionsText);
-		throw new Error("Invalid response from AI model");
+		throw new Error(
+			`Invalid response from AI model: ${(error as Error).message}`
+		);
 	}
 }
 
@@ -36,11 +44,25 @@ export async function POST(request: NextRequest) {
 		const { markdown } = await request.json();
 		const suggestions = await generateSuggestions(markdown);
 		return NextResponse.json({ suggestions });
-	} catch (error) {
+	} catch (error: unknown) {
 		console.error("Error:", error);
-		return NextResponse.json(
-			{ error: "An error occurred while generating suggestions" },
-			{ status: 500 }
-		);
+
+		if (error instanceof Error) {
+			return NextResponse.json(
+				{
+					error: "An error occurred while generating suggestions",
+					details: error.message,
+					stack: error.stack
+				},
+				{ status: 500 }
+			);
+		} else {
+			return NextResponse.json(
+				{
+					error: "An unknown error occurred while generating suggestions"
+				},
+				{ status: 500 }
+			);
+		}
 	}
 }
