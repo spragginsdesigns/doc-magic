@@ -2,9 +2,11 @@ import React, { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Download, Loader2, Lightbulb } from "lucide-react";
+import { Download, Loader2, Lightbulb, CheckCircle } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import ReactMarkdown from "react-markdown";
+import { motion, AnimatePresence } from "framer-motion";
+import "@/app/globals.css";
 
 const DocMagic: React.FC = () => {
 	const [inputText, setInputText] = useState("");
@@ -14,6 +16,7 @@ const DocMagic: React.FC = () => {
 	const [statusMessage, setStatusMessage] = useState("");
 	const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
 	const [isSuggestionsLoading, setIsSuggestionsLoading] = useState(false);
+	const [conversionSteps, setConversionSteps] = useState<string[]>([]);
 
 	const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
 		setInputText(e.target.value);
@@ -23,40 +26,61 @@ const DocMagic: React.FC = () => {
 		setIsLoading(true);
 		setProgress(0);
 		setStatusMessage("Initiating conversion...");
+		setOutputMarkdown("");
+		setConversionSteps([]);
+		setAiSuggestions([]);
 
 		try {
+			const steps = [
+				"Preprocessing text",
+				"Splitting into sections",
+				"Converting to Markdown",
+				"Applying local refinements",
+				"Performing API refinement (if needed)",
+				"Finalizing document"
+			];
+
+			for (let i = 0; i < steps.length; i++) {
+				setConversionSteps((prev) => [...prev, steps[i]]);
+				setProgress((i + 1) * (100 / steps.length));
+				setStatusMessage(steps[i]);
+
+				// Simulate processing time for each step
+				await new Promise((resolve) => setTimeout(resolve, 1000));
+			}
+
 			const response = await fetch("/api/convert", {
 				method: "POST",
-				headers: {
-					"Content-Type": "application/json"
-				},
+				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ text: inputText })
 			});
 
-			// Simulating progress updates
-			const interval = setInterval(() => {
-				setProgress((prevProgress) => {
-					const newProgress = prevProgress + 10;
-					if (newProgress >= 90) {
-						clearInterval(interval);
-						return 90;
-					}
-					setStatusMessage(`Converting... ${newProgress}% complete`);
-					return newProgress;
-				});
-			}, 1000);
+			if (!response.ok)
+				throw new Error(`HTTP error! status: ${response.status}`);
 
 			const data = await response.json();
-			clearInterval(interval);
+			if (data.error) throw new Error(data.error);
+
 			setOutputMarkdown(data.markdown);
 			setProgress(100);
-			setStatusMessage("Conversion complete!");
+			setStatusMessage("Conversion complete! Generating suggestions...");
+
+			// Add suggestion generation step
+			setConversionSteps((prev) => [...prev, "Generating AI suggestions"]);
+
+			// Generate suggestions
+			await generateAiSuggestions();
+
+			setStatusMessage("Process completed successfully!");
 		} catch (error) {
 			console.error("Error:", error);
 			setOutputMarkdown("An error occurred during conversion");
-			setStatusMessage("Error occurred. Please try again.");
+			setStatusMessage(
+				`Error occurred: ${(error as Error).message}. Please try again.`
+			);
+		} finally {
+			setIsLoading(false);
 		}
-		setIsLoading(false);
 	};
 
 	const handleExport = () => {
@@ -71,7 +95,6 @@ const DocMagic: React.FC = () => {
 
 	const generateAiSuggestions = useCallback(async () => {
 		setIsSuggestionsLoading(true);
-		setStatusMessage("Generating AI suggestions...");
 		try {
 			const response = await fetch("/api/suggestions", {
 				method: "POST",
@@ -91,16 +114,9 @@ const DocMagic: React.FC = () => {
 			console.error("Error generating suggestions:", error);
 			setAiSuggestions(["Failed to generate suggestions. Please try again."]);
 		} finally {
-			setStatusMessage("");
 			setIsSuggestionsLoading(false);
 		}
 	}, [outputMarkdown]);
-
-	useEffect(() => {
-		if (outputMarkdown && !isLoading) {
-			generateAiSuggestions();
-		}
-	}, [outputMarkdown, isLoading, generateAiSuggestions]);
 
 	return (
 		<div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 p-8">
@@ -151,8 +167,25 @@ const DocMagic: React.FC = () => {
 					</Button>
 					{isLoading && (
 						<div className="space-y-2">
-							<Progress value={progress} className="w-full" />
+							<Progress value={progress} className="w-full bg-gray-600" />
 							<p className="text-center text-gray-300">{statusMessage}</p>
+							<div className="bg-gray-700 p-4 rounded-lg">
+								<AnimatePresence>
+									{conversionSteps.map((step, index) => (
+										<motion.div
+											key={step}
+											initial={{ opacity: 0, y: 20 }}
+											animate={{ opacity: 1, y: 0 }}
+											exit={{ opacity: 0, y: -20 }}
+											transition={{ duration: 0.5 }}
+											className="flex items-center text-gray-300 mb-2"
+										>
+											<CheckCircle className="mr-2 h-4 w-4 text-green-500" />
+											<span>{step}</span>
+										</motion.div>
+									))}
+								</AnimatePresence>
+							</div>
 						</div>
 					)}
 					{aiSuggestions.length > 0 && (

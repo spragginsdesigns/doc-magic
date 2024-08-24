@@ -1,126 +1,220 @@
 import { NextRequest, NextResponse } from "next/server";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { setTimeout } from "timers/promises";
+import { log } from "@/utils/logger";
+import OpenAI from "openai";
+import NodeCache from "node-cache";
 
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!);
-const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+const MAX_TOKENS = 8000; // Adjust based on the model's actual limit
+const TOKENS_PER_CHAR = 0.25; // Rough estimate, adjust as needed
 
-// Configuration
-const MAX_CHUNK_SIZE = 10000; // Adjust based on model's context window
-
-// Utility function to split text into chunks
-function chunkText(text: string, maxChunkSize = MAX_CHUNK_SIZE): string[] {
-	const chunks: string[] = [];
-	for (let i = 0; i < text.length; i += maxChunkSize) {
-		chunks.push(text.slice(i, i + maxChunkSize));
-	}
-	return chunks;
+function estimateTokens(text: string): number {
+	return Math.ceil(text.length * TOKENS_PER_CHAR);
 }
 
-// Function to analyze a single chunk of text
-async function analyzeContent(text: string): Promise<any> {
-	const prompt = `Analyze the following text and provide a JSON object with these properties:
-    mainTopic: The main topic or theme of the text
-    contentType: The type of content (e.g., article, tutorial, research paper)
-    keyPoints: An array of key points or main ideas
-    suggestedStructure: A suggested structure for organizing the content
+function splitIntoSections(text: string): string[] {
+	const sections: string[] = [];
+	let currentSection = "";
 
-    Provide the response as a valid JSON object without any markdown formatting or code blocks.
+	text.split("\n\n").forEach((paragraph) => {
+		if (estimateTokens(currentSection + paragraph) > MAX_TOKENS) {
+			if (currentSection) sections.push(currentSection);
+			currentSection = paragraph;
+		} else {
+			currentSection += (currentSection ? "\n\n" : "") + paragraph;
+		}
+	});
 
-    Text to analyze:
+	if (currentSection) sections.push(currentSection);
+	return sections;
+}
+
+const openai = new OpenAI({
+	apiKey: process.env.OPENAI_API_KEY
+});
+
+const MAX_CHUNK_SIZE = 10000;
+const cache = new NodeCache({ stdTTL: 600 }); // Cache for 10 minutes
+
+// 1. Preprocessing the Text Locally
+function preprocessText(text: string): { chunks: string[]; structures: any[] } {
+	const structures: any[] = [];
+
+	// Extract code blocks
+	text = text.replace(/```[\s\S]*?```/g, (match) => {
+		structures.push({ type: "code", content: match });
+		return "{{CODE_BLOCK}}";
+	});
+
+	// Extract headers
+	text = text.replace(/^#{1,6}\s.*$/gm, (match) => {
+		structures.push({ type: "header", content: match });
+		return "{{HEADER}}";
+	});
+
+	// Extract lists
+	text = text.replace(/^(\s*[-*+]\s.*)$/gm, (match) => {
+		structures.push({ type: "list", content: match });
+		return "{{LIST_ITEM}}";
+	});
+
+	// Dynamic chunk sizing
+	const chunks = text.split("\n\n").reduce((acc, para) => {
+		if (para.length > MAX_CHUNK_SIZE / 2) {
+			acc.push(...chunkText(para, MAX_CHUNK_SIZE / 2));
+		} else {
+			acc.push(para);
+		}
+		return acc;
+	}, [] as string[]);
+
+	return { chunks, structures };
+}
+
+function chunkText(text: string, maxChunkSize = MAX_CHUNK_SIZE): string[] {
+	return text.match(new RegExp(`.{1,${maxChunkSize}}`, "g")) || [];
+}
+
+// 2. Single API Call with Combined Chunks
+async function convertToMarkdown(
+	text: string,
+	model: "gpt-4o-mini" = "gpt-4o-mini"
+): Promise<string> {
+	const cacheKey = `markdown_${text.slice(0, 100)}`;
+	const cachedResult = cache.get(cacheKey);
+	if (cachedResult) {
+		return cachedResult as string;
+	}
+
+	const prompt = `Convert the following text into well-structured, official documentation in Markdown format.
+    Analyze the content, create an appropriate structure, and format it as Markdown.
+    Include headers, lists, code blocks, and emphasis where needed.
+    Add a brief introduction and conclusion.
+    Ensure consistent formatting throughout.
+
+    Text to convert:
     ${text}`;
 
 	try {
-		const result = await model.generateContent(prompt);
-		const responseText = await result.response.text();
-
-		// Safely parse JSON, handling potential errors
-		return JSON.parse(responseText.replace(/```json\n?|```\n?/g, "").trim());
+		log("info", "Converting to Markdown", { textLength: text.length, model });
+		const result = await callWithRetry(() =>
+			openai.chat.completions.create({
+				model: model,
+				messages: [{ role: "user", content: prompt }]
+			})
+		);
+		const markdown = result.choices[0].message.content || "";
+		cache.set(cacheKey, markdown);
+		return markdown;
 	} catch (error) {
-		console.error("Error analyzing content:", error);
-		throw new Error("Content analysis failed.");
-	}
-}
-
-// Function to generate a Markdown outline from analysis
-async function generateOutline(analysis: any): Promise<string> {
-	const prompt = `Based on this content analysis, generate a detailed Markdown outline:
-    ${JSON.stringify(analysis, null, 2)}
-
-    Create an outline with appropriate headings, subheadings, and bullet points.`;
-
-	try {
-		const result = await model.generateContent(prompt);
-		return await result.response.text();
-	} catch (error) {
-		console.error("Error generating outline:", error);
-		throw new Error("Outline generation failed.");
-	}
-}
-
-// Function to convert a text chunk to Markdown based on an outline
-async function convertToMarkdown(
-	text: string,
-	outline: string
-): Promise<string> {
-	const prompt = `Convert the following text into well-structured Markdown, following this outline:
-
-    Outline:
-    ${outline}
-
-    Text to convert:
-    ${text}
-
-    Use appropriate Markdown formatting, including headers, lists, code blocks, and emphasis where needed.`;
-
-	try {
-		const result = await model.generateContent(prompt);
-		return await result.response.text();
-	} catch (error) {
-		console.error("Error converting to Markdown:", error);
+		log("error", "Error converting to Markdown", { error });
 		throw new Error("Markdown conversion failed.");
 	}
 }
 
-// Function to refine generated Markdown
-async function refineMarkdown(markdown: string): Promise<string> {
-	const prompt = `Refine the following Markdown content:
+// 3. Post-Processing and Refinement
+function localRefinement(markdown: string): string {
+	// Implement local refinement logic here
+	// For example, ensure consistent newlines, fix common formatting issues, etc.
+	return markdown
+		.replace(/\n{3,}/g, "\n\n")
+		.replace(/(\*\*.*?\*\*)/g, (match) => `\n${match}\n`)
+		.replace(/^-\s/gm, "* ");
+}
+
+async function apiRefinement(markdown: string): Promise<string> {
+	const prompt = `Refine and improve the following Markdown content:
 
     ${markdown}
 
-    1. Ensure consistent formatting throughout
-    2. Add or improve transitions between sections
+    1. Ensure the structure is logical and flows well
+    2. Improve transitions between sections
     3. Highlight key terms or concepts
-    4. Add a brief introduction and conclusion if not present
-    5. Ensure all links and code blocks are properly formatted`;
+    4. Ensure all links and code blocks are properly formatted
+    5. Add or improve any necessary explanations
+    6. Maintain a professional and consistent tone throughout`;
 
 	try {
-		const result = await model.generateContent(prompt);
-		return await result.response.text();
+		log("info", "Refining Markdown", { markdownLength: markdown.length });
+		const result = await callWithRetry(() =>
+			openai.chat.completions.create({
+				model: "gpt-4o-mini",
+				messages: [{ role: "user", content: prompt }]
+			})
+		);
+		return result.choices[0].message.content || "";
 	} catch (error) {
-		console.error("Error refining Markdown:", error);
+		log("error", "Error refining Markdown", { error });
 		throw new Error("Markdown refinement failed.");
 	}
 }
 
-// Main API route handler
+async function callWithRetry<T>(
+	fn: () => Promise<T>,
+	maxRetries: number = 3,
+	delay: number = 1000
+): Promise<T> {
+	let lastError: Error | null = null;
+	for (let i = 0; i < maxRetries; i++) {
+		try {
+			return await fn();
+		} catch (error) {
+			log("warn", `Attempt ${i + 1} failed, retrying in ${delay}ms...`);
+			lastError = error instanceof Error ? error : new Error(String(error));
+			await setTimeout(delay);
+			delay *= 2; // Exponential backoff
+		}
+	}
+	throw lastError || new Error("Max retries reached");
+}
+
 export async function POST(request: NextRequest) {
 	try {
 		const { text } = await request.json();
-		const chunks = chunkText(text);
-		let finalMarkdown = "";
+		const { structures } = preprocessText(text);
 
-		for (const chunk of chunks) {
-			const analysis = await analyzeContent(chunk);
-			const outline = await generateOutline(analysis);
-			let markdown = await convertToMarkdown(chunk, outline);
-			markdown = await refineMarkdown(markdown);
+		// Combine all text
+		const fullText = text.replace(
+			/{{CODE_BLOCK}}|{{HEADER}}|{{LIST_ITEM}}/g,
+			(match: string) => {
+				const structure = structures.find((s) =>
+					s.content.includes(match.slice(2, -2))
+				);
+				return structure ? structure.content : match;
+			}
+		);
 
-			finalMarkdown += markdown + "\n\n---\n\n";
+		// Split into larger sections
+		const sections = splitIntoSections(fullText);
+
+		log("info", "Starting conversion process", {
+			sectionCount: sections.length
+		});
+
+		// Process each section
+		const markdownSections = await Promise.all(
+			sections.map(async (section, index) => {
+				log("info", `Processing section ${index + 1}/${sections.length}`);
+				return await convertToMarkdown(section);
+			})
+		);
+
+		let combinedMarkdown = markdownSections.join("\n\n");
+
+		// Local refinement
+		combinedMarkdown = localRefinement(combinedMarkdown);
+
+		// API refinement only if necessary
+		if (combinedMarkdown.length > MAX_CHUNK_SIZE) {
+			const refinedSections = splitIntoSections(combinedMarkdown);
+			combinedMarkdown = (
+				await Promise.all(refinedSections.map(apiRefinement))
+			).join("\n\n");
 		}
 
-		return NextResponse.json({ markdown: finalMarkdown });
+		log("info", "Conversion process completed successfully");
+		return NextResponse.json({ markdown: combinedMarkdown });
 	} catch (error) {
-		console.error("Error during conversion:", error);
+		log("error", "Error during conversion", { error });
 		return NextResponse.json(
 			{ error: "An error occurred during conversion." },
 			{ status: 500 }
