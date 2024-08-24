@@ -131,7 +131,9 @@ async function apiRefinement(markdown: string): Promise<string> {
     3. Highlight key terms or concepts
     4. Ensure all links and code blocks are properly formatted
     5. Add or improve any necessary explanations
-    6. Maintain a professional and consistent tone throughout`;
+    6. Maintain a professional and consistent tone throughout
+		7. Ensure the content is free of grammatical errors
+		8. Ensure the original wording is still maintained and the context is preserved`;
 
 	try {
 		log("info", "Refining Markdown", { markdownLength: markdown.length });

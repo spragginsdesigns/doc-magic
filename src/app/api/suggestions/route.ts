@@ -27,60 +27,99 @@ async function callWithRetry<T>(
 	throw lastError || new Error("Max retries reached");
 }
 
-async function generateSuggestions(markdown: string): Promise<string[]> {
-	const prompt = `Given the following markdown content, provide 3-5 suggestions for improving or enhancing the document. Focus on structure, content, and clarity. Present each suggestion as a concise, actionable item. Start each suggestion with a dash (-).
+interface DocumentAnalysis {
+	contentSummary: string;
+	detectedSections: string[];
+	structuralElements: string[];
+	enhancementOpportunities: string[];
+	estimatedReadingTime: number;
+}
 
-Markdown content:
-${markdown}`;
+async function analyzeDocument(text: string): Promise<DocumentAnalysis> {
+	if (!text || typeof text !== "string") {
+		throw new Error("Invalid input: text must be a non-empty string");
+	}
+
+	const prompt = `Analyze the following unstructured text and provide insights in the following format:
+    1. Content Summary: A brief 1-2 sentence summary of the content.
+    2. Detected Sections: List the main topics or sections you can identify.
+    3. Structural Elements: Identify any existing structural elements (e.g., lists, potential headers, code blocks).
+    4. Enhancement Opportunities: Suggest 2-3 ways the structure could be improved in markdown.
+    5. Estimated Reading Time: Provide an estimated reading time in minutes.
+
+    Text to analyze:
+    ${text}`;
 
 	try {
-		log("info", "Generating suggestions", { contentLength: markdown.length });
+		log("info", "Analyzing document", { contentLength: text.length });
 		const result = await callWithRetry(() =>
 			openai.chat.completions.create({
-				model: "gpt-4",
+				model: "gpt-4o-mini",
 				messages: [{ role: "user", content: prompt }]
 			})
 		);
-		const suggestionsText = result.choices[0].message.content || "";
+		const analysis = result.choices[0].message.content || "";
 
-		const suggestions = suggestionsText
-			.split("\n")
-			.filter((line) => line.trim().startsWith("-"))
-			.map((line) => line.trim().substring(1).trim());
+		const parsedAnalysis = parseAnalysis(analysis);
 
-		if (suggestions.length > 0) {
-			log("info", "Suggestions generated successfully", {
-				count: suggestions.length
-			});
-			return suggestions;
-		} else {
-			log("warn", "No valid suggestions found in AI response");
-			return ["No specific suggestions generated. Please try again."];
-		}
+		log("info", "Document analysis completed successfully");
+		return parsedAnalysis;
 	} catch (error) {
-		log("error", "Error generating suggestions", { error });
-		return ["Failed to generate suggestions. Please try again."];
+		log("error", "Error analyzing document", { error });
+		throw new Error(
+			"Document analysis failed: " +
+				(error instanceof Error ? error.message : String(error))
+		);
 	}
+}
+
+function parseAnalysis(analysis: string): DocumentAnalysis {
+	const sections = analysis.split(/\d+\.\s/).filter(Boolean);
+	return {
+		contentSummary: sections[0]?.trim() || "No summary available.",
+		detectedSections:
+			sections[1]
+				?.split(",")
+				.map((s) => s.trim())
+				.filter(Boolean) || [],
+		structuralElements:
+			sections[2]
+				?.split(",")
+				.map((s) => s.trim())
+				.filter(Boolean) || [],
+		enhancementOpportunities:
+			sections[3]
+				?.split(",")
+				.map((s) => s.trim())
+				.filter(Boolean) || [],
+		estimatedReadingTime: parseInt(sections[4]?.match(/\d+/)?.[0] || "0", 10)
+	};
 }
 
 export async function POST(request: NextRequest) {
 	try {
-		const { markdown } = await request.json();
-		const suggestions = await generateSuggestions(markdown);
-		return NextResponse.json({ suggestions });
+		const body = await request.json();
+		if (!body || !body.text) {
+			return NextResponse.json(
+				{ error: "Invalid request: missing 'text' in the request body" },
+				{ status: 400 }
+			);
+		}
+		const analysis = await analyzeDocument(body.text);
+		return NextResponse.json({ analysis });
 	} catch (error: unknown) {
 		log("error", "Error in POST handler", { error });
 		if (error instanceof Error) {
 			return NextResponse.json(
 				{
-					error: "An error occurred while generating suggestions",
+					error: "An error occurred while analyzing the document",
 					details: error.message
 				},
 				{ status: 500 }
 			);
 		} else {
 			return NextResponse.json(
-				{ error: "An unknown error occurred while generating suggestions" },
+				{ error: "An unknown error occurred while analyzing the document" },
 				{ status: 500 }
 			);
 		}
