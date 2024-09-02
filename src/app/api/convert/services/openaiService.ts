@@ -9,7 +9,7 @@ const openai = new OpenAI({
 
 export async function convertToMarkdown(
 	text: string,
-	model: "gpt-4o-mini" = "gpt-4o-mini",
+	model: "gpt-4o" = "gpt-4o",
 ): Promise<string> {
 	const cacheKey = `markdown_${text.slice(0, 100)}`;
 	const cachedResult = getCachedMarkdown(cacheKey);
@@ -17,14 +17,20 @@ export async function convertToMarkdown(
 		return cachedResult;
 	}
 
-	const prompt = `Convert the following text into well-structured, official documentation in Markdown format.
-    Analyze the content, create an appropriate structure, and format it as Markdown.
-    Include headers, lists, code blocks, and emphasis where needed.
-    Add a brief introduction and conclusion.
-    Ensure consistent formatting throughout.
+	const prompt = `Convert the following unstructured text into well-structured, professional documentation using Markdown format:
 
-    Text to convert:
-    ${text}`;
+${text}
+
+Instructions:
+1. Analyze the content and create an appropriate structure with logical headers.
+2. Use Markdown syntax for formatting, including headers, lists, code blocks, and emphasis.
+3. Ensure consistent and professional formatting throughout.
+4. Include relevant links if mentioned in the original text.
+5. Highlight key concepts or terms where appropriate.
+6. Organize the content for clarity and readability.
+7. Maintain the original information and context.
+8. Do not add any introductory or concluding remarks about the conversion process.
+9. The output should be pure Markdown, ready for direct use.`;
 
 	try {
 		log("info", "Converting to Markdown", { textLength: text.length, model });
@@ -46,16 +52,20 @@ export async function convertToMarkdown(
 export async function apiRefinement(markdown: string): Promise<string> {
 	const prompt = `Refine and improve the following Markdown content:
 
-    ${markdown}
+${markdown}
 
-    1. Ensure the structure is logical and flows well
-    2. Improve transitions between sections
-    3. Highlight key terms or concepts
-    4. Ensure all links and code blocks are properly formatted
-    5. Add or improve any necessary explanations
-    6. Maintain a professional and consistent tone throughout
-    7. Ensure the content is free of grammatical errors
-    8. Ensure the original wording is still maintained and the context is preserved`;
+Refinement instructions:
+1. Ensure a logical and flowing structure.
+2. Improve transitions between sections.
+3. Highlight key terms or concepts using appropriate Markdown syntax.
+4. Verify and correct formatting of all links and code blocks.
+5. Enhance explanations where necessary, maintaining brevity.
+6. Ensure a consistent and professional tone.
+7. Correct any grammatical or spelling errors.
+8. Preserve the original context and core information.
+9. Optimize the Markdown structure for readability and clarity.
+10. Do not add any comments about the refinement process.
+11. The output should be pure, refined Markdown content.`;
 
 	try {
 		log("info", "Refining Markdown", { markdownLength: markdown.length });

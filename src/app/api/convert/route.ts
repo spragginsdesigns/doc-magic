@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
 				const cachedResult = getCachedMarkdown(cacheKey);
 				if (cachedResult) return cachedResult;
 
-				const result = await convertToMarkdown(section, "gpt-4o-mini");
+				const result = await convertToMarkdown(section, "gpt-4o");
 				setCachedMarkdown(cacheKey, result);
 				return result;
 			}),
