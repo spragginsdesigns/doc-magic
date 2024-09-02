@@ -1,11 +1,20 @@
-import React, { useState, useEffect, useCallback } from "react";
+// biome-ignore lint/style/useImportType: <explanation>
+import React, { useState, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Download, Loader2, Lightbulb, CheckCircle } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Download, Loader2, CheckCircle } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import ReactMarkdown from "react-markdown";
 import { motion, AnimatePresence } from "framer-motion";
+import {
+	Dialog,
+	DialogContent,
+	DialogHeader,
+	DialogTitle,
+	DialogFooter,
+} from "@/components/ui/dialog";
 import "@/app/globals.css";
 
 const DocMagic: React.FC = () => {
@@ -14,9 +23,10 @@ const DocMagic: React.FC = () => {
 	const [isLoading, setIsLoading] = useState(false);
 	const [progress, setProgress] = useState(0);
 	const [statusMessage, setStatusMessage] = useState("");
-	const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
-	const [isSuggestionsLoading, setIsSuggestionsLoading] = useState(false);
 	const [conversionSteps, setConversionSteps] = useState<string[]>([]);
+	const [showTitleDialog, setShowTitleDialog] = useState(false);
+	const [titleSuggestions, setTitleSuggestions] = useState<string[]>([]);
+	const [selectedTitle, setSelectedTitle] = useState("");
 
 	const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
 		setInputText(e.target.value);
@@ -28,7 +38,6 @@ const DocMagic: React.FC = () => {
 		setStatusMessage("Initiating conversion...");
 		setOutputMarkdown("");
 		setConversionSteps([]);
-		setAiSuggestions([]);
 
 		try {
 			const steps = [
@@ -37,7 +46,7 @@ const DocMagic: React.FC = () => {
 				"Converting to Markdown",
 				"Applying local refinements",
 				"Performing API refinement (if needed)",
-				"Finalizing document"
+				"Finalizing document",
 			];
 
 			for (let i = 0; i < steps.length; i++) {
@@ -52,7 +61,7 @@ const DocMagic: React.FC = () => {
 			const response = await fetch("/api/convert", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ text: inputText })
+				body: JSON.stringify({ text: inputText }),
 			});
 
 			if (!response.ok)
@@ -65,58 +74,59 @@ const DocMagic: React.FC = () => {
 			setProgress(100);
 			setStatusMessage("Conversion complete! Generating suggestions...");
 
-			// Add suggestion generation step
-			setConversionSteps((prev) => [...prev, "Generating AI suggestions"]);
-
-			// Generate suggestions
-			await generateAiSuggestions();
-
 			setStatusMessage("Process completed successfully!");
 		} catch (error) {
 			console.error("Error:", error);
 			setOutputMarkdown("An error occurred during conversion");
 			setStatusMessage(
-				`Error occurred: ${(error as Error).message}. Please try again.`
+				`Error occurred: ${(error as Error).message}. Please try again.`,
 			);
 		} finally {
 			setIsLoading(false);
 		}
 	};
 
-	const handleExport = () => {
-		const blob = new Blob([outputMarkdown], { type: "text/markdown" });
-		const url = URL.createObjectURL(blob);
-		const a = document.createElement("a");
-		a.href = url;
-		a.download = "converted_markdown.md";
-		a.click();
-		URL.revokeObjectURL(url);
+	const handleExport = async () => {
+		setShowTitleDialog(true);
+		await generateTitleSuggestions();
 	};
 
-	const generateAiSuggestions = useCallback(async () => {
-		setIsSuggestionsLoading(true);
+	const handleTitleSelect = (title: string) => {
+		setSelectedTitle(title);
+	};
+
+	const handleTitleConfirm = () => {
+		if (selectedTitle) {
+			const fileName = `${selectedTitle.replace(/[^a-z0-9]/gi, "_").toLowerCase()}.md`;
+			const blob = new Blob([outputMarkdown], { type: "text/markdown" });
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement("a");
+			a.href = url;
+			a.download = fileName;
+			a.click();
+			URL.revokeObjectURL(url);
+			setShowTitleDialog(false);
+		}
+	};
+
+	const generateTitleSuggestions = async () => {
 		try {
-			const response = await fetch("/api/suggestions", {
+			const response = await fetch("/api/generate-title", {
 				method: "POST",
-				headers: {
-					"Content-Type": "application/json"
-				},
-				body: JSON.stringify({ markdown: outputMarkdown })
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ markdown: outputMarkdown }),
 			});
 
-			if (!response.ok) {
-				throw new Error("Failed to fetch suggestions");
-			}
+			if (!response.ok) throw new Error("Failed to generate title suggestions");
 
 			const data = await response.json();
-			setAiSuggestions(data.suggestions);
+			setTitleSuggestions(data.titles);
+			setSelectedTitle(data.titles[0] || "");
 		} catch (error) {
-			console.error("Error generating suggestions:", error);
-			setAiSuggestions(["Failed to generate suggestions. Please try again."]);
-		} finally {
-			setIsSuggestionsLoading(false);
+			console.error("Error generating title suggestions:", error);
+			setTitleSuggestions(["Untitled Document"]);
 		}
-	}, [outputMarkdown]);
+	};
 
 	return (
 		<div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 p-8">
@@ -188,22 +198,6 @@ const DocMagic: React.FC = () => {
 							</div>
 						</div>
 					)}
-					{aiSuggestions.length > 0 && (
-						<div className="bg-gray-700 p-4 rounded-lg">
-							<h3 className="text-lg font-semibold text-gray-200 mb-2 flex items-center">
-								<Lightbulb className="mr-2 h-5 w-5" /> AI Suggestions
-							</h3>
-							{isSuggestionsLoading ? (
-								<p className="text-gray-300">Generating suggestions...</p>
-							) : (
-								<ul className="list-disc list-inside text-gray-300">
-									{aiSuggestions.map((suggestion, index) => (
-										<li key={index}>{suggestion}</li>
-									))}
-								</ul>
-							)}
-						</div>
-					)}
 					<Button
 						onClick={handleExport}
 						className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-bold py-2 px-4 rounded"
@@ -211,6 +205,36 @@ const DocMagic: React.FC = () => {
 					>
 						<Download className="mr-2 h-4 w-4" /> Export Markdown
 					</Button>
+					<Dialog open={showTitleDialog} onOpenChange={setShowTitleDialog}>
+						<DialogContent>
+							<DialogHeader>
+								<DialogTitle>Choose a title for your document</DialogTitle>
+							</DialogHeader>
+							<Input
+								value={selectedTitle}
+								onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+									setSelectedTitle(e.target.value)
+								}
+								placeholder="Enter a custom title or select a suggestion"
+								className="mb-4"
+							/>
+							<div className="space-y-2">
+								{titleSuggestions.map((title, index) => (
+									<Button
+										key={`title-${index}-${title.slice(0, 10)}`}
+										onClick={() => handleTitleSelect(title)}
+										variant="outline"
+										className="w-full justify-start"
+									>
+										{title}
+									</Button>
+								))}
+							</div>
+							<DialogFooter>
+								<Button onClick={handleTitleConfirm}>Confirm & Download</Button>
+							</DialogFooter>
+						</DialogContent>
+					</Dialog>
 				</CardContent>
 			</Card>
 		</div>
