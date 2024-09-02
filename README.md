@@ -1,5 +1,5 @@
-`<div align="center">`
-`<img src="https://github.com/spragginsdesigns/doc-magic/blob/master/public/docmagic-icon.png" alt="DocMagic Icon" width="200" height="200">`
+<div align="center">
+<img src="https://github.com/spragginsdesigns/doc-magic/blob/master/public/docmagic-icon.png" alt="DocMagic Icon" width="200" height="200">
 
 # DocMagic
 
