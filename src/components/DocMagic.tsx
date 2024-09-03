@@ -1,6 +1,12 @@
 // biome-ignore lint/style/useImportType: <explanation>
-import React, { useState, useCallback } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import React, { useState } from "react";
+import {
+	Card,
+	CardContent,
+	CardHeader,
+	CardTitle,
+	CardFooter,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -15,9 +21,9 @@ import {
 	DialogTitle,
 	DialogFooter,
 } from "@/components/ui/dialog";
-import "@/app/globals.css";
+import Image from "next/image";
 
-const DocMagic: React.FC = () => {
+const DocMagic = () => {
 	const [inputText, setInputText] = useState("");
 	const [outputMarkdown, setOutputMarkdown] = useState("");
 	const [isLoading, setIsLoading] = useState(false);
@@ -53,11 +59,10 @@ const DocMagic: React.FC = () => {
 				setConversionSteps((prev) => [...prev, steps[i]]);
 				setProgress((i + 1) * (100 / steps.length));
 				setStatusMessage(steps[i]);
-
-				// Simulate processing time for each step
 				await new Promise((resolve) => setTimeout(resolve, 1000));
 			}
 
+			// Simulating API call
 			const response = await fetch("/api/convert", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
@@ -66,15 +71,10 @@ const DocMagic: React.FC = () => {
 
 			if (!response.ok)
 				throw new Error(`HTTP error! status: ${response.status}`);
-
 			const data = await response.json();
-			if (data.error) throw new Error(data.error);
-
 			setOutputMarkdown(data.markdown);
 			setProgress(100);
-			setStatusMessage("Conversion complete! Generating suggestions...");
-
-			setStatusMessage("Process completed successfully!");
+			setStatusMessage("Conversion complete!");
 		} catch (error) {
 			console.error("Error:", error);
 			setOutputMarkdown("An error occurred during conversion");
@@ -110,73 +110,100 @@ const DocMagic: React.FC = () => {
 	};
 
 	const generateTitleSuggestions = async () => {
-		try {
-			const response = await fetch("/api/generate-title", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ markdown: outputMarkdown }),
-			});
-
-			if (!response.ok) throw new Error("Failed to generate title suggestions");
-
-			const data = await response.json();
-			setTitleSuggestions(data.titles);
-			setSelectedTitle(data.titles[0] || "");
-		} catch (error) {
-			console.error("Error generating title suggestions:", error);
-			setTitleSuggestions(["Untitled Document"]);
-		}
+		// Simulating API call for title suggestions
+		setTitleSuggestions([
+			"Document 1",
+			"Amazing README",
+			"Project Overview",
+			"User Guide",
+			"Technical Specs",
+		]);
+		setSelectedTitle("Document 1");
 	};
 
 	return (
-		<div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 p-8">
-			<Card className="w-full max-w-6xl mx-auto bg-gray-800 border-gray-700">
-				<CardHeader>
-					<CardTitle className="text-4xl font-bold text-center bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-600">
-						DocMagic
-					</CardTitle>
+		<div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 p-8 flex flex-col items-center">
+			<Card className="w-full max-w-6xl bg-gray-800 border-gray-700 overflow-hidden">
+				<CardHeader className="bg-gradient-to-r from-purple-800 via-purple-600 to-pink-600 p-8">
+					<div className="flex flex-col md:flex-row items-center justify-between space-y-6 md:space-y-0 md:space-x-8">
+						<div className="flex items-center space-x-4">
+							<Image
+								src="/docmagic-icon.png"
+								alt="DocMagic Icon"
+								width={80}
+								height={80}
+								className="rounded-full border-4 border-white shadow-lg"
+							/>
+							<div>
+								<CardTitle className="text-4xl md:text-5xl font-extrabold text-white tracking-tight">
+									DocMagic
+								</CardTitle>
+								<p className="text-purple-200 text-lg mt-2">
+									Transform Your Text with AI
+								</p>
+							</div>
+						</div>
+						<div className="flex space-x-4">
+							<Button
+								variant="secondary"
+								className="bg-white text-purple-700 hover:bg-purple-100"
+							>
+								How It Works
+							</Button>
+							<Button
+								variant="outline"
+								className="text-white border-white hover:bg-purple-700"
+							>
+								Get Started
+							</Button>
+						</div>
+					</div>
 				</CardHeader>
-				<CardContent className="grid gap-6">
-					<div className="grid grid-cols-2 gap-4">
-						<div>
+				<CardContent className="p-6 space-y-6">
+					<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+						<div className="space-y-2">
 							<label
 								htmlFor="input"
-								className="text-lg font-semibold text-gray-200 mb-2 block"
+								className="text-lg font-semibold text-gray-200"
 							>
 								Input Text
 							</label>
 							<Textarea
 								id="input"
 								placeholder="Paste your text here..."
-								className="w-full h-64 bg-gray-700 text-gray-100 border-gray-600"
+								className="h-64 bg-gray-700 text-gray-100 border-gray-600 resize-none"
 								value={inputText}
 								onChange={handleInputChange}
 							/>
 						</div>
-						<div>
+						<div className="space-y-2">
 							<label
 								htmlFor="output"
-								className="text-lg font-semibold text-gray-200 mb-2 block"
+								className="text-lg font-semibold text-gray-200"
 							>
 								Markdown Preview
 							</label>
-							<div className="w-full h-64 bg-gray-700 text-gray-100 border-gray-600 overflow-auto p-4">
+							<div className="h-64 bg-gray-700 text-gray-100 border border-gray-600 rounded-md overflow-auto p-4">
 								<ReactMarkdown>{outputMarkdown}</ReactMarkdown>
 							</div>
 						</div>
 					</div>
 					<Button
 						onClick={handleConvert}
-						className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-bold py-2 px-4 rounded"
+						className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-bold py-3 rounded-md transition-all duration-300 transform hover:scale-105"
 						disabled={isLoading}
 					>
 						{isLoading ? (
-							<Loader2 className="mr-2 h-4 w-4 animate-spin" />
-						) : null}
-						{isLoading ? "Converting..." : "Convert to Markdown"}
+							<>
+								<Loader2 className="mr-2 h-4 w-4 animate-spin" />
+								Converting...
+							</>
+						) : (
+							"Convert to Markdown"
+						)}
 					</Button>
 					{isLoading && (
-						<div className="space-y-2">
+						<div className="space-y-4">
 							<Progress value={progress} className="w-full bg-gray-600" />
 							<p className="text-center text-gray-300">{statusMessage}</p>
 							<div className="bg-gray-700 p-4 rounded-lg">
@@ -200,43 +227,60 @@ const DocMagic: React.FC = () => {
 					)}
 					<Button
 						onClick={handleExport}
-						className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-bold py-2 px-4 rounded"
+						className="w-full bg-gradient-to-r from-green-500 to-blue-500 hover:from-green-600 hover:to-blue-600 text-white font-bold py-3 rounded-md transition-all duration-300 transform hover:scale-105"
 						disabled={!outputMarkdown}
 					>
-						<Download className="mr-2 h-4 w-4" /> Export Markdown
+						<Download className="mr-2 h-4 w-4" />
+						Export Markdown
 					</Button>
-					<Dialog open={showTitleDialog} onOpenChange={setShowTitleDialog}>
-						<DialogContent>
-							<DialogHeader>
-								<DialogTitle>Choose a title for your document</DialogTitle>
-							</DialogHeader>
-							<Input
-								value={selectedTitle}
-								onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-									setSelectedTitle(e.target.value)
-								}
-								placeholder="Enter a custom title or select a suggestion"
-								className="mb-4"
-							/>
-							<div className="space-y-2">
-								{titleSuggestions.map((title, index) => (
-									<Button
-										key={`title-${index}-${title.slice(0, 10)}`}
-										onClick={() => handleTitleSelect(title)}
-										variant="outline"
-										className="w-full justify-start"
-									>
-										{title}
-									</Button>
-								))}
-							</div>
-							<DialogFooter>
-								<Button onClick={handleTitleConfirm}>Confirm & Download</Button>
-							</DialogFooter>
-						</DialogContent>
-					</Dialog>
 				</CardContent>
+				<CardFooter className="bg-gray-900 p-4 text-center text-gray-400">
+					Created by{" "}
+					<a
+						href="https://www.spragginsdesigns.xyz"
+						target="_blank"
+						rel="noopener noreferrer"
+						className="text-purple-400 hover:text-purple-300 transition-colors duration-300"
+					>
+						Austin Spraggins
+					</a>
+				</CardFooter>
 			</Card>
+
+			<Dialog open={showTitleDialog} onOpenChange={setShowTitleDialog}>
+				<DialogContent className="bg-gray-800 text-white">
+					<DialogHeader>
+						<DialogTitle>Choose a title for your document</DialogTitle>
+					</DialogHeader>
+					<Input
+						value={selectedTitle}
+						onChange={(e) => setSelectedTitle(e.target.value)}
+						placeholder="Enter a custom title or select a suggestion"
+						className="mb-4 bg-gray-700 text-white border-gray-600"
+					/>
+					<div className="space-y-2">
+						{titleSuggestions.map((title, index) => (
+							<Button
+								// biome-ignore lint/suspicious/noArrayIndexKey: <explanation>
+								key={index}
+								onClick={() => handleTitleSelect(title)}
+								variant="outline"
+								className="w-full justify-start text-left bg-gray-700 hover:bg-gray-600 border-gray-600"
+							>
+								{title}
+							</Button>
+						))}
+					</div>
+					<DialogFooter>
+						<Button
+							onClick={handleTitleConfirm}
+							className="bg-purple-500 hover:bg-purple-600 text-white"
+						>
+							Confirm & Download
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
 		</div>
 	);
 };
