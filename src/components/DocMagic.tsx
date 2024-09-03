@@ -33,6 +33,8 @@ const DocMagic = () => {
 	const [showTitleDialog, setShowTitleDialog] = useState(false);
 	const [titleSuggestions, setTitleSuggestions] = useState<string[]>([]);
 	const [selectedTitle, setSelectedTitle] = useState("");
+	// State to set conversion to completed
+	const [conversionComplete, setConversionComplete] = useState(false);
 
 	const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
 		setInputText(e.target.value);
@@ -44,6 +46,7 @@ const DocMagic = () => {
 		setStatusMessage("Initiating conversion...");
 		setOutputMarkdown("");
 		setConversionSteps([]);
+		setConversionComplete(false);
 
 		try {
 			const steps = [
@@ -75,12 +78,14 @@ const DocMagic = () => {
 			setOutputMarkdown(data.markdown);
 			setProgress(100);
 			setStatusMessage("Conversion complete!");
+			setConversionComplete(true);
 		} catch (error) {
 			console.error("Error:", error);
 			setOutputMarkdown("An error occurred during conversion");
 			setStatusMessage(
 				`Error occurred: ${(error as Error).message}. Please try again.`,
 			);
+			setConversionComplete(false);
 		} finally {
 			setIsLoading(false);
 		}
@@ -91,13 +96,21 @@ const DocMagic = () => {
 		await generateTitleSuggestions();
 	};
 
-	const handleTitleSelect = (title: string) => {
-		setSelectedTitle(title);
-	};
-
 	const handleTitleConfirm = () => {
 		if (selectedTitle) {
-			const fileName = `${selectedTitle.replace(/[^a-z0-9]/gi, "_").toLowerCase()}.md`;
+			// Remove numbers, special characters, and trim whitespace
+			const cleanTitle = selectedTitle
+				.replace(/^\d+\.?\s*/, "") // Remove leading numbers and dots
+				.replace(/[^a-zA-Z0-9\s]/g, "") // Remove special characters
+				.trim();
+
+			// Capitalize each word and remove spaces
+			const beautifulTitle = cleanTitle
+				.split(" ")
+				.map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+				.join("");
+
+			const fileName = `${beautifulTitle}.md`;
 			const blob = new Blob([outputMarkdown], { type: "text/markdown" });
 			const url = URL.createObjectURL(blob);
 			const a = document.createElement("a");
@@ -110,15 +123,28 @@ const DocMagic = () => {
 	};
 
 	const generateTitleSuggestions = async () => {
-		// Simulating API call for title suggestions
-		setTitleSuggestions([
-			"Document 1",
-			"Amazing README",
-			"Project Overview",
-			"User Guide",
-			"Technical Specs",
-		]);
-		setSelectedTitle("Document 1");
+		try {
+			const response = await fetch("/api/generate-title", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ markdown: outputMarkdown }),
+			});
+			if (!response.ok)
+				throw new Error(`HTTP error! status: ${response.status}`);
+			const data = await response.json();
+			setTitleSuggestions(data.titles);
+			setSelectedTitle(data.titles[0] || "");
+		} catch (error) {
+			console.error("Error generating title suggestions:", error);
+			setTitleSuggestions([
+				"Document 1",
+				"Amazing README",
+				"Project Overview",
+				"User Guide",
+				"Technical Specs",
+			]);
+			setSelectedTitle("Document 1");
+		}
 	};
 
 	return (
@@ -228,10 +254,10 @@ const DocMagic = () => {
 					<Button
 						onClick={handleExport}
 						className="w-full bg-gradient-to-r from-green-500 to-blue-500 hover:from-green-600 hover:to-blue-600 text-white font-bold py-3 rounded-md transition-all duration-300 transform hover:scale-105"
-						disabled={!outputMarkdown}
+						disabled={!conversionComplete}
 					>
 						<Download className="mr-2 h-4 w-4" />
-						Export Markdown
+						Download Document
 					</Button>
 				</CardContent>
 				<CardFooter className="bg-gray-900 p-4 text-center text-gray-400">
@@ -250,20 +276,23 @@ const DocMagic = () => {
 			<Dialog open={showTitleDialog} onOpenChange={setShowTitleDialog}>
 				<DialogContent className="bg-gray-800 text-white">
 					<DialogHeader>
-						<DialogTitle>Choose a title for your document</DialogTitle>
+						<DialogTitle>Choose or enter a title for your document</DialogTitle>
 					</DialogHeader>
 					<Input
 						value={selectedTitle}
 						onChange={(e) => setSelectedTitle(e.target.value)}
-						placeholder="Enter a custom title or select a suggestion"
+						placeholder="Enter a custom title"
 						className="mb-4 bg-gray-700 text-white border-gray-600"
 					/>
 					<div className="space-y-2">
+						<p className="text-sm text-gray-400 mb-2">
+							Or select a suggestion:
+						</p>
 						{titleSuggestions.map((title, index) => (
 							<Button
 								// biome-ignore lint/suspicious/noArrayIndexKey: <explanation>
 								key={index}
-								onClick={() => handleTitleSelect(title)}
+								onClick={() => setSelectedTitle(title)}
 								variant="outline"
 								className="w-full justify-start text-left bg-gray-700 hover:bg-gray-600 border-gray-600"
 							>
