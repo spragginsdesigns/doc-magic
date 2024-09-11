@@ -24,7 +24,7 @@
 		"express": "^4.19.2",
 		"framer-motion": "^11.3.30",
 		"js-yaml": "^4.1.0",
-		"lucide-react": "^0.428.0",
+		"lucide-react": "^0.429.0",
 		"markdown-to-jsx": "^7.5.0",
 		"next": "14.2.5",
 		"node-cache": "^5.1.2",
