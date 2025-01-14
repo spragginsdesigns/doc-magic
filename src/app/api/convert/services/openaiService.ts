@@ -32,7 +32,9 @@ Instructions:
 6. Organize the content for clarity and readability.
 7. Maintain the original information and context.
 8. Do not add any introductory or concluding remarks about the conversion process.
-9. The output should be pure Markdown, ready for direct use.`;
+9. The output should be pure Markdown, ready for direct use.
+10. Do not wrap the output in markdown code block delimiters (\`\`\`).
+11. Start directly with the content using appropriate markdown syntax.`;
 
 	try {
 		log("info", "Converting to Markdown", { textLength: text.length, model });
@@ -69,7 +71,9 @@ Refinement instructions:
 8. Preserve the original context and core information.
 9. Optimize the Markdown structure for readability and clarity.
 10. Do not add any comments about the refinement process.
-11. The output should be pure, refined Markdown content.`;
+11. The output should be pure Markdown content.
+12. Do not wrap the output in markdown code block delimiters (\`\`\`).
+13. Start directly with the content using appropriate markdown syntax.`;
 
 	try {
 		log("info", "Refining Markdown", { markdownLength: markdown.length });
@@ -77,7 +81,7 @@ Refinement instructions:
 			openai.chat.completions.create({
 				model: "deepseek-chat", // Changed to DeepSeek's model
 				messages: [{ role: "user", content: prompt }],
-				temperature: 0.7,
+				temperature: 0.5,
 				max_tokens: 4096
 			})
 		);
