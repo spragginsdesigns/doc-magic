@@ -313,8 +313,8 @@ const DocMagic = () => {
 						</Button>
 					)}
 				</CardContent>
-				<CardFooter className="bg-gray-900 p-4 text-center text-gray-400">
-					Created by{" "}
+				<CardFooter className="bg-gray-900 p-4 flex justify-center items-center text-gray-400">
+					<span>Created by{"\u00A0"}</span>
 					<a
 						href="https://www.spragginsdesigns.xyz"
 						target="_blank"
