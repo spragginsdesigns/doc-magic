@@ -5,7 +5,7 @@ import { log } from "@/utils/logger";
 import {
 	preprocessText,
 	splitIntoSections,
-	localRefinement,
+	localRefinement
 } from "./services/textProcessing";
 import { convertToMarkdown, apiRefinement } from "./services/openaiService";
 import { getCachedMarkdown, setCachedMarkdown } from "./services/cacheService";
@@ -22,17 +22,17 @@ export async function POST(request: NextRequest) {
 			/{{CODE_BLOCK}}|{{HEADER}}|{{LIST_ITEM}}/g,
 			(match: string) => {
 				const structure = structures.find((s) =>
-					s.content.includes(match.slice(2, -2)),
+					s.content.includes(match.slice(2, -2))
 				);
 				return structure ? structure.content : match;
-			},
+			}
 		);
 
 		// Split into larger sections
 		const sections = splitIntoSections(fullText);
 
 		log("info", "Starting conversion process", {
-			sectionCount: sections.length,
+			sectionCount: sections.length
 		});
 
 		// Process each section
@@ -43,10 +43,10 @@ export async function POST(request: NextRequest) {
 				const cachedResult = getCachedMarkdown(cacheKey);
 				if (cachedResult) return cachedResult;
 
-				const result = await convertToMarkdown(section, "gpt-4o");
+				const result = await convertToMarkdown(section, "deepseek-chat");
 				setCachedMarkdown(cacheKey, result);
 				return result;
-			}),
+			})
 		);
 
 		let combinedMarkdown = markdownSections.join("\n\n");
@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
 		log("error", "Error during conversion", { error });
 		return NextResponse.json(
 			{ error: "An error occurred during conversion." },
-			{ status: 500 },
+			{ status: 500 }
 		);
 	}
 }

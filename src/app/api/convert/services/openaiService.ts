@@ -3,13 +3,15 @@ import { log } from "@/utils/logger";
 import { callWithRetry } from "./utils";
 import { getCachedMarkdown, setCachedMarkdown } from "./cacheService";
 
+// Initialize OpenAI client with DeepSeek configuration
 const openai = new OpenAI({
-	apiKey: process.env.OPENAI_API_KEY,
+	apiKey: process.env.DEEPSEEK_API_KEY,
+	baseURL: "https://api.deepseek.com/v1" // DeepSeek's API endpoint
 });
 
 export async function convertToMarkdown(
 	text: string,
-	model: "gpt-4o" = "gpt-4o",
+	model: string = "deepseek-chat" // Changed default model to DeepSeek's model
 ): Promise<string> {
 	const cacheKey = `markdown_${text.slice(0, 100)}`;
 	const cachedResult = getCachedMarkdown(cacheKey);
@@ -38,7 +40,9 @@ Instructions:
 			openai.chat.completions.create({
 				model: model,
 				messages: [{ role: "user", content: prompt }],
-			}),
+				temperature: 0.7,
+				max_tokens: 4096 // DeepSeek's default max tokens
+			})
 		);
 		const markdown = result.choices[0].message.content || "";
 		setCachedMarkdown(cacheKey, markdown);
@@ -71,9 +75,11 @@ Refinement instructions:
 		log("info", "Refining Markdown", { markdownLength: markdown.length });
 		const result = await callWithRetry(() =>
 			openai.chat.completions.create({
-				model: "gpt-4o-mini",
+				model: "deepseek-chat", // Changed to DeepSeek's model
 				messages: [{ role: "user", content: prompt }],
-			}),
+				temperature: 0.7,
+				max_tokens: 4096
+			})
 		);
 		return result.choices[0].message.content || "";
 	} catch (error) {
