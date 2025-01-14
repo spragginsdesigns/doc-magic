@@ -5,12 +5,12 @@ import {
 	CardContent,
 	CardHeader,
 	CardTitle,
-	CardFooter,
+	CardFooter
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { Download, Loader2, CheckCircle } from "lucide-react";
+import { Download, Loader2, CheckCircle, Copy, Check } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import ReactMarkdown from "react-markdown";
 import { motion, AnimatePresence } from "framer-motion";
@@ -19,9 +19,13 @@ import {
 	DialogContent,
 	DialogHeader,
 	DialogTitle,
-	DialogFooter,
+	DialogFooter
 } from "@/components/ui/dialog";
 import Image from "next/image";
+import { MarkdownEditor } from "./MarkdownEditor";
+import { exportMarkdown } from "@/utils/exportUtils";
+import { log } from "@/utils/logger";
+import { CopyButton } from "./CopyButton";
 
 const DocMagic = () => {
 	const [inputText, setInputText] = useState("");
@@ -35,6 +39,8 @@ const DocMagic = () => {
 	const [selectedTitle, setSelectedTitle] = useState("");
 	// State to set conversion to completed
 	const [conversionComplete, setConversionComplete] = useState(false);
+	const [isEditing, setIsEditing] = useState(false);
+	const [editedMarkdown, setEditedMarkdown] = useState<string>("");
 
 	const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
 		setInputText(e.target.value);
@@ -55,7 +61,7 @@ const DocMagic = () => {
 				"Converting to Markdown",
 				"Applying local refinements",
 				"Performing API refinement (if needed)",
-				"Finalizing document",
+				"Finalizing document"
 			];
 
 			for (let i = 0; i < steps.length; i++) {
@@ -69,7 +75,7 @@ const DocMagic = () => {
 			const response = await fetch("/api/convert", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ text: inputText }),
+				body: JSON.stringify({ text: inputText })
 			});
 
 			if (!response.ok)
@@ -83,7 +89,7 @@ const DocMagic = () => {
 			console.error("Error:", error);
 			setOutputMarkdown("An error occurred during conversion");
 			setStatusMessage(
-				`Error occurred: ${(error as Error).message}. Please try again.`,
+				`Error occurred: ${(error as Error).message}. Please try again.`
 			);
 			setConversionComplete(false);
 		} finally {
@@ -91,9 +97,8 @@ const DocMagic = () => {
 		}
 	};
 
-	const handleExport = async () => {
-		setShowTitleDialog(true);
-		await generateTitleSuggestions();
+	const handleExport = async (format: "md" | "pdf" | "html") => {
+		await exportMarkdown(outputMarkdown, format);
 	};
 
 	const handleTitleConfirm = () => {
@@ -127,7 +132,7 @@ const DocMagic = () => {
 			const response = await fetch("/api/generate-title", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ markdown: outputMarkdown }),
+				body: JSON.stringify({ markdown: outputMarkdown })
 			});
 			if (!response.ok)
 				throw new Error(`HTTP error! status: ${response.status}`);
@@ -141,9 +146,33 @@ const DocMagic = () => {
 				"Amazing README",
 				"Project Overview",
 				"User Guide",
-				"Technical Specs",
+				"Technical Specs"
 			]);
 			setSelectedTitle("Document 1");
+		}
+	};
+
+	const handleEdit = () => {
+		setEditedMarkdown(outputMarkdown);
+		setIsEditing(true);
+	};
+
+	const handleSaveEdit = async (newMarkdown: string) => {
+		setOutputMarkdown(newMarkdown);
+		setIsEditing(false);
+		// Optionally save to cache or perform additional refinement
+		try {
+			const refined = await fetch("/api/convert/refine", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ markdown: newMarkdown })
+			}).then((res) => res.json());
+
+			if (refined.markdown) {
+				setOutputMarkdown(refined.markdown);
+			}
+		} catch (error) {
+			log("error", "Error refining edited markdown", { error });
 		}
 	};
 
@@ -203,12 +232,15 @@ const DocMagic = () => {
 							/>
 						</div>
 						<div className="space-y-2">
-							<label
-								htmlFor="output"
-								className="text-lg font-semibold text-gray-200"
-							>
-								Markdown Preview
-							</label>
+							<div className="flex justify-between items-center">
+								<label
+									htmlFor="output"
+									className="text-lg font-semibold text-gray-200"
+								>
+									Markdown Preview
+								</label>
+								<CopyButton text={outputMarkdown} />
+							</div>
 							<div className="h-64 bg-gray-700 text-gray-100 border border-gray-600 rounded-md overflow-auto p-4">
 								<ReactMarkdown>{outputMarkdown}</ReactMarkdown>
 							</div>
@@ -251,14 +283,35 @@ const DocMagic = () => {
 							</div>
 						</div>
 					)}
-					<Button
-						onClick={handleExport}
-						className="w-full bg-gradient-to-r from-green-500 to-blue-500 hover:from-green-600 hover:to-blue-600 text-white font-bold py-3 rounded-md transition-all duration-300 transform hover:scale-105"
-						disabled={!conversionComplete}
-					>
-						<Download className="mr-2 h-4 w-4" />
-						Download Document
-					</Button>
+					<div className="flex gap-2 mt-4">
+						<Button
+							variant="outline"
+							onClick={() => handleExport("md")}
+							className="flex gap-2"
+						>
+							<Download className="h-4 w-4" />
+							Export MD
+						</Button>
+						<Button
+							variant="outline"
+							onClick={() => handleExport("html")}
+							className="flex gap-2"
+						>
+							<Download className="h-4 w-4" />
+							Export HTML
+						</Button>
+					</div>
+					{isEditing ? (
+						<MarkdownEditor
+							markdown={editedMarkdown}
+							onSave={handleSaveEdit}
+							onCancel={() => setIsEditing(false)}
+						/>
+					) : (
+						<Button variant="outline" className="mt-4" onClick={handleEdit}>
+							Edit Markdown
+						</Button>
+					)}
 				</CardContent>
 				<CardFooter className="bg-gray-900 p-4 text-center text-gray-400">
 					Created by{" "}
