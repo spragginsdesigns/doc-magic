@@ -1,0 +1,22 @@
+# Temporary files
+/tmp/
+**/tmp/
+*.tmp
+
+# Cache directories
+.cache/
+**/.cache/
+**/cache/
+.next/
+.vercel/
+node_modules/
+**/.env*
+
+# Build outputs
+dist/
+build/
+out/
+
+# OS files
+.DS_Store
+Thumbs.db
